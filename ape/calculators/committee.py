@@ -8,10 +8,8 @@ import numpy as np
 from pathlib import Path
 from collections import Counter
 
-from ase import Atoms
 import ase.io
 from ase.calculators.calculator import Calculator, all_changes
-from ase.calculators.calculator import PropertyNotImplementedError
 
 
 __default_properties = ['energy', 'forces', 'stress']
@@ -128,7 +126,8 @@ class Committee:
         if self._validation_set:
             return self._validation_set
         else:
-            raise AttributeError('`Committee`-instance has been altered since last call of `Committee.set_internal_validation_set()`.')
+            raise AttributeError('`Committee`-instance has been altered since last call '
+                                 'of `Committee.set_internal_validation_set()`.')
 
     def _update(self):
         self._number = len(self.members)
@@ -176,7 +175,7 @@ class Committee:
 
     def set_internal_validation_set(self, appearance_threshold):
         """
-        Define a validation set based on the Atoms-objects of subsampled committee training sets.
+        Define a validation set based on the Atoms-objects of sub-sampled committee training sets.
 
         appearance_threshold: int
             Number of times a sample for the validation set
@@ -277,7 +276,21 @@ class Committee:
         return np.sqrt(alpha_squared)
 
     def scale_uncertainty(self, value, prop):
-        """Scale uncertainty ```value``` obtained with the committee according to the calibration for the corresponding property (```prop```)."""
+        """
+        Scale uncertainty ```value``` obtained with the committee according to the calibration
+        for the corresponding property (```prop```).
+
+        Parameter:
+        ----------
+        value: float / ndarray
+            Represents the uncertainty values (e.g. energy, forces) to be scaled.
+        prop: str
+            The property associated with ```value``` (for which the committee needs to be calibrated).
+
+        Returns:
+        --------
+        Scaled input ```value```.
+        """
         return self.alphas[prop] * value
 
 

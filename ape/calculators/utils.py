@@ -4,30 +4,29 @@ import ase.io
 
 def subsample(inputs, output_files, M, N_s, keep_isolated_atoms=True):
     """
-    Draw subsamples (without replacement) from given configurations.
+    Draw sub-samples (without replacement) from given configurations.
 
     Parameter:
     ----------
     inputs: list(Atoms)
-        List of configurations to draw subsamples from
+        List of configurations to draw sub-samples from
         (e.g. full training set).
     output_files: list(str / Path)
-        Target locations for subsampled sets of configurations.
+        Target locations for sub-sampled sets of configurations.
     M: int
-        Number of subsets to be drawn.
+        Number of sub-sets to be drawn.
     N_s: int
-        Number of samples per subsets.
+        Number of samples per sub-sets.
     keep_isolated_atoms: bool, default True
-        Make isolated atoms (if present) be part of each subset.
+        Make isolated atoms (if present) be part of each sub-set.
 
     Returns:
     --------
-    list(list(Atoms)) with subsampled sets of configurations.
-
+    list(list(Atoms)) with sub-sampled sets of configurations.
     """
     # keep track of position in original set of configurations
     samples = []
-    isolated_atoms = []  # keep isolated atoms for each subsample
+    isolated_atoms = []  # keep isolated atoms for each sub-sample
     for idx_i, atoms_i in enumerate(inputs):
         atoms_i.info['_Index_FullTrainingSet'] = idx_i
         if keep_isolated_atoms and len(atoms_i) == 1:
