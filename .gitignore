@@ -1,5 +1,6 @@
 ._*
 __pycache__
+.idea
 *xyz.idx
 *swp
 *.egg-info
