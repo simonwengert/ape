@@ -3,6 +3,7 @@ Committee of Models
 
 Calculate properties with a list of models and saves them into info/arrays.
 """
+import io
 import warnings
 import numpy as np
 from pathlib import Path
@@ -310,6 +311,10 @@ class CommitteeMember:
     def __init__(self, calculator, training_data=None):
         self._calculator = calculator
 
+        self._filename = 'no filename'
+        self._atoms = []
+        self._ids = []
+
         if training_data is not None:
             self.add_training_data(training_data)
 
@@ -323,15 +328,30 @@ class CommitteeMember:
         """Path to the atoms/samples in the committee member."""
         return self._filename
 
+    @filename.setter
+    def filename(self, filename):
+        """Set path to the atoms/samples in the committee member."""
+        raise RuntimeError('Use `add_training_data()` to modify the committee member')
+
     @property
     def atoms(self):
         """Atoms/samples in the committee member."""
         return self._atoms
 
+    @atoms.setter
+    def atoms(self, atoms):
+        """Set Atoms/samples in the committee member."""
+        raise RuntimeError('Use `add_training_data()` to modify the committee member')
+
     @property
     def ids(self):
         """Identifiers of atoms/samples in the committee member."""
         return self._ids
+
+    @ids.setter
+    def ids(self, ids):
+        """Set identifiers of atoms/samples in the committee member."""
+        raise RuntimeError('Use `add_training_data()` to modify the committee member')
 
     def add_training_data(self, training_data):
         """
@@ -341,8 +361,12 @@ class CommitteeMember:
         ----------
         training_data: str / Path / list(Atoms), optional default=None
             Path to or Atoms of (sub-sampled) training set used to create the machine-learned model
-            defined by the ```calculator```.
+            defined by the ```calculator```. Individual Atoms need an Atoms.info['_Index_FullTrainingset']
+            for unique identification.
         """
+        # TODO:
+        # if len(self.atoms) > 0:
+        #     logger.warning('Overwriting training data')
         if isinstance(training_data, (str, Path)):
             self._filename = Path(training_data)
             self._atoms = ase.io.read(self.filename, ':')
@@ -353,7 +377,11 @@ class CommitteeMember:
 
     def is_sample_in_atoms(self, sample):
         """Check if passed Atoms-object is part of this committee member (by comparing identifiers)."""
-        return sample.info['_Index_FullTrainingSet'] in self.ids
+        if '_Index_FullTrainingSet' not in sample.info:
+            raise RuntimeError('Can\'t test if `sample` is in `atoms`.'
+                               '`sample` has no Atoms.info[\'_Index_FullTrainingSet\']')
+        else:
+            return sample.info['_Index_FullTrainingSet'] in self.ids
 
     def __repr__(self):
         s = ''
