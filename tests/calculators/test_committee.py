@@ -67,7 +67,7 @@ def test_committeemember_is_sample_in_atoms(committeemember):
 
     assert committeemember.is_sample_in_atoms(sample=training_data[0])
     with pytest.raises(RuntimeError,
-                       match=re.escape('Can\'t test if `sample` is in `atoms`.'
+                       match=re.escape('Can\'t test if `sample` is in `atoms`. '
                                        '`sample` has no Atoms.info[\'_Index_FullTrainingSet\']')):
         assert not committeemember.is_sample_in_atoms(sample=test_data[0])
     test_data[0].info['_Index_FullTrainingSet'] = -1
