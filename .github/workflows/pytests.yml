@@ -28,10 +28,13 @@ jobs:
         run: conda install pip
 
       - name: Install dependencies from pip
-        run: pip install numpy flake8 pytest pytest-cov quippy
+        run: pip install numpy flake8 pytest pytest-cov
 
       - name: Install latest ASE from gitlab
         run: pip install git+https://gitlab.com/ase/ase.git
+
+      - name: Install Quippy from PyPI
+        run: pip install quippy-ase
 
       - name: Install ape
         run: pip install .[tests]
