@@ -4,12 +4,16 @@ Committee of Models
 Calculate properties with a list of models and saves them into info/arrays.
 """
 import warnings
+import logging
 import numpy as np
 from pathlib import Path
 from collections import Counter
 
 import ase.io
 from ase.calculators.calculator import Calculator, all_changes
+
+
+logger = logging.getLogger('ape.committee')
 
 
 __default_properties = ['energy', 'forces', 'stress']
@@ -84,6 +88,10 @@ class Committee:
     def __init__(self, members=None):
         self.members = [] if members is None else members
 
+        logger.info('Initialized committee')
+        for line_i in self.__repr__().splitlines():
+            logger.debug(line_i)
+
     @property
     def members(self):
         """List with committee members."""
@@ -95,6 +103,7 @@ class Committee:
         for member_i in members:
             self._check_member_type(member_i)
         self._members = members
+        logger.info(f'Set {len(self.members)} members to represent the committee')
         self._update()
 
     @property
@@ -136,8 +145,10 @@ class Committee:
     def validation_set(self):
         """List of Atoms-objects."""
         if not self._validation_set:
-            warnings.warn('`Committee.set_internal_validation_set()` has not been called or '
-                          '`Committee`-instance has been altered since last call.')
+            msg = '`Committee.set_internal_validation_set()` has not been called or ' + \
+                  '`Committee`-instance has been altered since last call.'
+            logger.warning(msg)
+            warnings.warn(msg)
         return self._validation_set
 
     def _update(self):
@@ -149,11 +160,13 @@ class Committee:
         self._id_counter = Counter(self.ids)
         self._validation_set = []
         self._alphas = {}
+        logger.info('Updated committee status')
 
     def add_member(self, member):
         """Extend committee by new ```member``` (i.e. ```CommitteeMember```-instance)."""
         self._check_member_type(member)
         self.members.append(member)
+        logger.info('Added +1 member to the committee')
         self._update()
 
     def __add__(self, member):
@@ -178,8 +191,10 @@ class Committee:
             of committee members.
         """
         if self._alphas:
-            warnings.warn('`alphas` will be reset to avoid inconsistencies with new validation set.')
-        self._reset_calibration_parameters()
+            msg = '`alphas` will be reset to avoid inconsistencies with new validation set.'
+            logger.warning(msg)
+            warnings.warn(msg)
+            self._reset_calibration_parameters()
 
         assert 0 < appearance_threshold <= self.number - 2
 
@@ -189,9 +204,12 @@ class Committee:
                 break
             self._validation_set.append(self.id_to_atoms[id_i])
 
+        logger.info(f'Set internal validation set with {len(self.validation_set)} entries')
+
     def _reset_calibration_parameters(self):
         """Reset parameters obtained from calling ```self.calibrate()```."""
         self._alphas = {}
+        logger.info('Reset calibration parameters')
 
     def calibrate(self, prop, key, location, system_changes=all_changes):
         """
@@ -245,6 +263,9 @@ class Committee:
                     vars_pred=validation_pred_var,
                     )
                  })
+
+        logger.info(f'Calibrated committee for property \'{prop}\'')
+        logger.debug(f'\talpha = {self.alphas[prop]}')
 
     def is_calibrated_for(self, prop):
         """Check whether committee has been calibrated for ```prop```."""
@@ -306,9 +327,12 @@ class Committee:
         s += f'# atoms:                      {len(self.atoms):>10d}\n'
         s += f'# ids:                        {len(self.ids):>10d}\n'
         s += f'# atoms validation set:       {len(self._validation_set):>10d}\n'
-        s += f'calibrated for:\n'
-        for p_i in sorted(self.calibrated_for):
-            s += f'{"":>4s}{p_i:<18}{self.alphas[p_i]:>18}\n'
+        if not self.calibrated_for:
+            s += f'calibrated for:               {"-":>10}\n'
+        else:
+            s += f'calibrated for:\n'
+            for p_i in sorted(self.calibrated_for):
+                s += f'{"":>4s}{p_i:<18}{self.alphas[p_i]:>18}\n'
 
         for idx_i, cm_i in enumerate(self.members):
             s += '\n\n'
@@ -343,6 +367,10 @@ class CommitteeMember:
         if training_data is not None:
             self.set_training_data(training_data)
 
+        logger.info('Created committee member')
+        for line_i in self.__repr__().splitlines():
+            logger.debug(line_i)
+
     @property
     def calculator(self):
         """Model of the committee member."""
@@ -356,7 +384,9 @@ class CommitteeMember:
     @filename.setter
     def filename(self, filename):
         """Set path to the atoms/samples in the committee member."""
-        raise RuntimeError('Use `set_training_data()` to modify the committee member')
+        msg = 'Use `set_training_data()` to modify the committee member'
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     @property
     def atoms(self):
@@ -366,7 +396,9 @@ class CommitteeMember:
     @atoms.setter
     def atoms(self, atoms):
         """Set Atoms/samples in the committee member."""
-        raise RuntimeError('Use `set_training_data()` to modify the committee member')
+        msg = 'Use `set_training_data()` to modify the committee member'
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     @property
     def ids(self):
@@ -376,7 +408,9 @@ class CommitteeMember:
     @ids.setter
     def ids(self, ids):
         """Set identifiers of atoms/samples in the committee member."""
-        raise RuntimeError('Use `set_training_data()` to modify the committee member')
+        msg = 'Use `set_training_data()` to modify the committee member'
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     def set_training_data(self, training_data):
         """
@@ -390,7 +424,9 @@ class CommitteeMember:
             for unique identification.
         """
         if len(self.atoms) > 0:
-            warnings.warn('Overwriting current training data.')
+            msg = 'Overwriting current training data.'
+            logger.warning(msg)
+            warnings.warn(msg)
 
         if isinstance(training_data, (str, Path)):
             self._filename = Path(training_data)
@@ -403,8 +439,9 @@ class CommitteeMember:
     def is_sample_in_atoms(self, sample):
         """Check if passed Atoms-object is part of this committee member (by comparing identifiers)."""
         if '_Index_FullTrainingSet' not in sample.info:
-            raise RuntimeError('Can\'t test if `sample` is in `atoms`.'
-                               '`sample` has no Atoms.info[\'_Index_FullTrainingSet\']')
+            msg = 'Can\'t test if `sample` is in `atoms`. `sample` has no Atoms.info[\'_Index_FullTrainingSet\']'
+            logger.error(msg)
+            raise RuntimeError(msg)
         else:
             return sample.info['_Index_FullTrainingSet'] in self.ids
 
