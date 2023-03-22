@@ -3,7 +3,6 @@ Committee of Models
 
 Calculate properties with a list of models and saves them into info/arrays.
 """
-import io
 import warnings
 import numpy as np
 from pathlib import Path
@@ -73,7 +72,7 @@ class Committee:
     """
     Instances of this class represent a committee of models.
 
-    It's use is to store the ```CommitteeMembers``` representing the committee model
+    It's use is to store the ```CommitteeMember```s representing the committee model
     and to calibrate the obtained uncertainties (required when sub-sampling is used
     to create the training data of the committee members).
 
@@ -82,8 +81,20 @@ class Committee:
     members: list(M)
         List of ```CommitteeMember``` instances representing the committee model.
     """
-    def __init__(self, members=[]):
-        self.members = members
+    def __init__(self, members=None):
+        self.members = [] if members is None else members
+
+    @property
+    def members(self):
+        """List with committee members."""
+        return self._members
+
+    @members.setter
+    def members(self, members):
+        """Set list with committee members."""
+        for member_i in members:
+            self._check_member_type(member_i)
+        self._members = members
         self._update()
 
     @property
@@ -119,18 +130,18 @@ class Committee:
     @property
     def calibrated_for(self):
         """Set of properties the committee has been calibrated for."""
-        return self._calibrated_for
+        return self.alphas.keys()
 
     @property
     def validation_set(self):
         """List of Atoms-objects."""
-        if self._validation_set:
-            return self._validation_set
-        else:
-            raise AttributeError('`Committee`-instance has been altered since last call '
-                                 'of `Committee.set_internal_validation_set()`.')
+        if not self._validation_set:
+            warnings.warn('`Committee.set_internal_validation_set()` has not been called or '
+                          '`Committee`-instance has been altered since last call.')
+        return self._validation_set
 
     def _update(self):
+        """Update status when ```Committee```-instance has been altered."""
         self._number = len(self.members)
         self._atoms = [atoms_ij for cm_i in self.members for atoms_ij in cm_i.atoms]
         self._ids = [id_ij for cm_i in self.members for id_ij in cm_i.ids]
@@ -138,41 +149,24 @@ class Committee:
         self._id_counter = Counter(self.ids)
         self._validation_set = []
         self._alphas = {}
-        self._calibrated_for = set()
 
     def add_member(self, member):
-        """Extend committee by new ```member``` (i.e. CommitteeMember-instance)."""
+        """Extend committee by new ```member``` (i.e. ```CommitteeMember```-instance)."""
+        self._check_member_type(member)
         self.members.append(member)
         self._update()
 
     def __add__(self, member):
-        """Extend committee by new ```member``` (i.e. CommitteeMember-instance)."""
+        """Extend committee by new ```member``` (i.e. ```CommitteeMember```-instance)."""
+        self._check_member_type(member)
         self.add_member(member)
         return self
 
-    def __repr__(self):
-        s = ''
-
-        s_i = f'Committee Status\n'
-        s += s_i
-        s += '='*len(s_i) + '\n\n'
-
-        s += f'# members:                    {self.number:>10d}\n'
-        s += f'# atoms:                      {len(self.atoms):>10d}\n'
-        s += f'# ids:                        {len(self.ids):>10d}\n'
-        s += f'# atoms validation set:       {len(self._validation_set):>10d}\n'
-        s += f'calibrated for:\n'
-        for p_i in sorted(self.calibrated_for):
-            s += f'{"":>4s}{p_i:<18}{self.alphas[p_i]:>18}\n'
-
-        for idx_i, cm_i in enumerate(self.members):
-            s += '\n\n'
-            s_i = f'Committee Member {idx_i}:\n'
-            s += s_i
-            s += '-'*len(s_i) + '\n'
-            s += cm_i.__repr__()
-
-        return s
+    @staticmethod
+    def _check_member_type(member):
+        """Make sure ```member``` is of type ```CommitteeMember```."""
+        assert isinstance(member, CommitteeMember), \
+            f'Members of `Committee` need to be of type `CommitteeMember`. Found {type(member)}'
 
     def set_internal_validation_set(self, appearance_threshold):
         """
@@ -180,17 +174,24 @@ class Committee:
 
         appearance_threshold: int
             Number of times a sample for the validation set
-            is maximally allowed to appear in the training set
-            of a committee member.
+            is maximally allowed to appear across the training sets
+            of committee members.
         """
+        if self._alphas:
+            warnings.warn('`alphas` will be reset to avoid inconsistencies with new validation set.')
+        self._reset_calibration_parameters()
 
-        assert appearance_threshold <= self.number - 2
+        assert 0 < appearance_threshold <= self.number - 2
 
         self._validation_set = []
         for id_i, appearance_i in self.id_counter.most_common()[::-1]:
-            if appearance_i <= appearance_threshold:
+            if appearance_i < appearance_threshold:
                 break
             self._validation_set.append(self.id_to_atoms[id_i])
+
+    def _reset_calibration_parameters(self):
+        """Reset parameters obtained from calling ```self.calibrate()```."""
+        self._alphas = {}
 
     def calibrate(self, prop, key, location, system_changes=all_changes):
         """
@@ -228,28 +229,28 @@ class Committee:
             validation_pred_var.append(np.var(sample_committee_pred, ddof=1, axis=0).flatten())
 
         # For symmetry-reasons it can happen that e.g. all values for a force component of an atom are equal.
-        # This would lead to a division-by-zero error in self._get_alpha() due to zero-variances.
+        # This would lead to a division-by-zero error in self._calculate_alpha() due to zero-variances.
         validation_ref = np.concatenate(validation_ref)
         validation_pred = np.concatenate(validation_pred)
         validation_pred_var = np.concatenate(validation_pred_var)
-        ignore_indices = np.where(validation_pred_var==0)[0]
+        ignore_indices = np.where(validation_pred_var == 0)[0]
         validation_ref = np.delete(validation_ref, ignore_indices)
         validation_pred = np.delete(validation_pred, ignore_indices)
         validation_pred_var = np.delete(validation_pred_var, ignore_indices)
 
         self._alphas.update(
-                {prop: self._get_alpha(vals_ref=validation_ref,
-                                       vals_pred=validation_pred,
-                                       var_pred=validation_pred_var,
-                                       )
-                })
-        self._calibrated_for.add(prop)
+                {prop: self._calculate_alpha(
+                    vals_ref=validation_ref,
+                    vals_pred=validation_pred,
+                    vars_pred=validation_pred_var,
+                    )
+                 })
 
     def is_calibrated_for(self, prop):
         """Check whether committee has been calibrated for ```prop```."""
-        return prop in self._calibrated_for
+        return prop in self.calibrated_for
 
-    def _get_alpha(self, vals_ref, vals_pred, var_pred):
+    def _calculate_alpha(self, vals_ref, vals_pred, vars_pred):
         """
         Get (linear) uncertainty scaling factor alpha.
 
@@ -263,7 +264,7 @@ class Committee:
             Reference values for validation set samples.
         vals_pred: ndarray(N)
             Values predicted by the committee for validation set samples.
-        var_pred: ndarray(N)
+        vars_pred: ndarray(N)
             Variance predicted by the committee for validation set samples.
 
         Returns:
@@ -272,7 +273,7 @@ class Committee:
         """
         N_val = len(vals_ref)
         M = self.number
-        alpha_squared = -1/M + (M - 3)/(M - 1) * 1/N_val * np.sum(np.power(vals_ref-vals_pred, 2) / var_pred)
+        alpha_squared = -1/M + (M - 3)/(M - 1) * 1/N_val * np.sum(np.power(vals_ref-vals_pred, 2) / vars_pred)
         assert alpha_squared > 0, f'Obtained negative value for `alpha_squared`: {alpha_squared}'
         return np.sqrt(alpha_squared)
 
@@ -293,6 +294,30 @@ class Committee:
         Scaled input ```value```.
         """
         return self.alphas[prop] * value
+
+    def __repr__(self):
+        s = ''
+
+        s_i = f'Committee Status\n'
+        s += s_i
+        s += '='*len(s_i) + '\n\n'
+
+        s += f'# members:                    {self.number:>10d}\n'
+        s += f'# atoms:                      {len(self.atoms):>10d}\n'
+        s += f'# ids:                        {len(self.ids):>10d}\n'
+        s += f'# atoms validation set:       {len(self._validation_set):>10d}\n'
+        s += f'calibrated for:\n'
+        for p_i in sorted(self.calibrated_for):
+            s += f'{"":>4s}{p_i:<18}{self.alphas[p_i]:>18}\n'
+
+        for idx_i, cm_i in enumerate(self.members):
+            s += '\n\n'
+            s_i = f'Committee Member {idx_i}:\n'
+            s += s_i
+            s += '-'*len(s_i) + '\n'
+            s += cm_i.__repr__()
+
+        return s
 
 
 class CommitteeMember:
@@ -316,7 +341,7 @@ class CommitteeMember:
         self._ids = []
 
         if training_data is not None:
-            self.add_training_data(training_data)
+            self.set_training_data(training_data)
 
     @property
     def calculator(self):
@@ -331,7 +356,7 @@ class CommitteeMember:
     @filename.setter
     def filename(self, filename):
         """Set path to the atoms/samples in the committee member."""
-        raise RuntimeError('Use `add_training_data()` to modify the committee member')
+        raise RuntimeError('Use `set_training_data()` to modify the committee member')
 
     @property
     def atoms(self):
@@ -341,7 +366,7 @@ class CommitteeMember:
     @atoms.setter
     def atoms(self, atoms):
         """Set Atoms/samples in the committee member."""
-        raise RuntimeError('Use `add_training_data()` to modify the committee member')
+        raise RuntimeError('Use `set_training_data()` to modify the committee member')
 
     @property
     def ids(self):
@@ -351,9 +376,9 @@ class CommitteeMember:
     @ids.setter
     def ids(self, ids):
         """Set identifiers of atoms/samples in the committee member."""
-        raise RuntimeError('Use `add_training_data()` to modify the committee member')
+        raise RuntimeError('Use `set_training_data()` to modify the committee member')
 
-    def add_training_data(self, training_data):
+    def set_training_data(self, training_data):
         """
         Read in and store the training data of this committee members from the passed ```filename```.
 
@@ -364,9 +389,9 @@ class CommitteeMember:
             defined by the ```calculator```. Individual Atoms need an Atoms.info['_Index_FullTrainingset']
             for unique identification.
         """
-        # TODO:
-        # if len(self.atoms) > 0:
-        #     logger.warning('Overwriting training data')
+        if len(self.atoms) > 0:
+            warnings.warn('Overwriting current training data.')
+
         if isinstance(training_data, (str, Path)):
             self._filename = Path(training_data)
             self._atoms = ase.io.read(self.filename, ':')
