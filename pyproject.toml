@@ -8,7 +8,7 @@ version = "0.1"
 description = """\
     The Atomic-Simulation-Environment Package Extension (APE) is a collection of tools extending the ASE project.
     """
-dependencies = ["numpy", "ase"]
+dependencies = ["numpy", "ase", "quippy"]
 authors = [
     {name = "Simon Peter Wengert"}
 ]
