@@ -37,7 +37,7 @@ class CommitteeUncertainty(Calculator):
     ----------
     committee: Committee-instance
         Representation for a collection of Calculators.
-    atoms : ase-Atoms
+    atoms : ase-Atoms, optional default=None
         Optional object to which the calculator will be attached.
     """
 
@@ -49,9 +49,14 @@ class CommitteeUncertainty(Calculator):
 
         super().__init__(atoms=atoms)
 
+        logger.info('Initialized committee uncertainty calculator')
+        for line_i in self.committee.__repr__().splitlines():
+            logger.debug(line_i)
+
     def calculate(self, atoms=None, properties=['energy', 'forces', 'stress'], system_changes=all_changes):
         """Calculates committee (mean) values and variances."""
 
+        logger.info(f'Calculating properties {properties} with committee')
         super().calculate(atoms, properties, system_changes)
 
         property_committee = {k_i: [] for k_i in properties}
