@@ -40,6 +40,14 @@ def committee():
     return committee
 
 
+@pytest.fixture
+def committee_calibrated(committee):
+    committee.set_internal_validation_set(appearance_threshold=3)
+    committee.calibrate(prop='energy', key='E_dftbplus_d4', location='info')
+    committee.calibrate(prop='forces', key='F_dftbplus_d4', location='arrays')
+    return committee
+
+
 def test_committeemember_initialize():
     ape.calculators.committee.CommitteeMember(calculator=ase.calculators.emt.EMT())
 
@@ -187,3 +195,20 @@ def test_committee_scale_uncertainty(committee):
     committee._alphas = {'energy': 2.5}
 
     assert committee.scale_uncertainty(2, 'energy') == 5.0
+
+
+def test_committeeuncertainty_initialize(committee_calibrated):
+    ape.calculators.committee.CommitteeUncertainty(committee=committee_calibrated)
+
+
+def test_committeeuncertainty_calculate(committee_calibrated):
+    calculator = ape.calculators.committee.CommitteeUncertainty(committee=committee_calibrated)
+    test_data = ase.io.read(os.path.join(f'{os.path.dirname(__file__)}/data/test_data.xyz'), ':')
+    for atoms_i in test_data:
+        calculator.calculate(atoms=atoms_i, properties=['energy', 'forces'])
+        for prop_j in ['energy', 'energy_uncertainty']:
+            np.testing.assert_array_almost_equal(calculator.results[prop_j], atoms_i.info[prop_j], decimal=6,
+                                                 err_msg=f'Missmatch in property \'{prop_j}\'')
+        for prop_j in ['forces', 'forces_uncertainty']:
+            np.testing.assert_array_almost_equal(calculator.results[prop_j], atoms_i.arrays[prop_j], decimal=6,
+                                                 err_msg=f'Missmatch in property \'{prop_j}\'')
