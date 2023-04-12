@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ape"
+name = "ape-pypi-ci"
 version = "0.1"
 description = """\
     The Atomic-Simulation-Environment Package Extension (APE) is a collection of tools extending the ASE project.
